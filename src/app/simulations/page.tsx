@@ -17,6 +17,34 @@ type SimulationRow = {
   }[] | null;
 };
 
+type SimulationListItem = {
+  id: string;
+  name: string;
+  createdAt: string;
+  regime: "micro" | "reel";
+  monthlyCashflowAfterTaxCents: number | null;
+  grossYieldBps: number | null;
+  netYieldBps: number | null;
+  verdictExplanation: string | null;
+  verdictBadge: "good" | "medium" | "bad" | null;
+  resultsAvailable: boolean;
+};
+
+const computeVerdictBadge = (
+  cashflowCents: number | null | undefined
+): "good" | "medium" | "bad" | null => {
+  if (typeof cashflowCents !== "number" || Number.isNaN(cashflowCents)) {
+    return null;
+  }
+  if (cashflowCents >= 0) {
+    return "good";
+  }
+  if (cashflowCents >= -10_000) {
+    return "medium";
+  }
+  return "bad";
+};
+
 export default async function SimulationsPage() {
   const supabase = await createSupabaseServerComponentClient();
   const { data: authData } = await supabase.auth.getUser();
@@ -37,33 +65,26 @@ export default async function SimulationsPage() {
     throw new Error(error.message);
   }
 
-  const items = (data as SimulationRow[] | null)?.map((simulation) => {
-    const input = simulation.simulation_inputs?.[0];
-    const regime = input?.regime ?? "micro";
-    const result = simulation.simulation_results?.find((row) => row.regime === regime) ?? null;
-    const monthlyCashflowAfterTaxCents = result?.monthly_cashflow_after_tax_cents ?? null;
-    const verdictBadge =
-      typeof monthlyCashflowAfterTaxCents === "number"
-        ? monthlyCashflowAfterTaxCents >= 0
-          ? "good"
-          : monthlyCashflowAfterTaxCents >= -10_000
-            ? "medium"
-            : "bad"
-        : null;
+  const items: SimulationListItem[] =
+    (data as SimulationRow[] | null)?.map((simulation) => {
+      const input = simulation.simulation_inputs?.[0];
+      const regime = input?.regime ?? "micro";
+      const result = simulation.simulation_results?.find((row) => row.regime === regime) ?? null;
+      const monthlyCashflowAfterTaxCents = result?.monthly_cashflow_after_tax_cents ?? null;
 
-    return {
-      id: simulation.id,
-      name: simulation.name,
-      createdAt: simulation.created_at,
-      regime,
-      monthlyCashflowAfterTaxCents,
-      grossYieldBps: result?.gross_yield_bps ?? null,
-      netYieldBps: result?.net_yield_bps ?? null,
-      verdictExplanation: result?.verdict_explanation ?? null,
-      verdictBadge,
-      resultsAvailable: Boolean(result),
-    };
-  }) ?? [];
+      return {
+        id: simulation.id,
+        name: simulation.name,
+        createdAt: simulation.created_at,
+        regime,
+        monthlyCashflowAfterTaxCents,
+        grossYieldBps: result?.gross_yield_bps ?? null,
+        netYieldBps: result?.net_yield_bps ?? null,
+        verdictExplanation: result?.verdict_explanation ?? null,
+        verdictBadge: computeVerdictBadge(monthlyCashflowAfterTaxCents),
+        resultsAvailable: Boolean(result),
+      };
+    }) ?? [];
 
   return (
     <SimulationsListClient items={items} deleteAction={deleteSimulation} />
