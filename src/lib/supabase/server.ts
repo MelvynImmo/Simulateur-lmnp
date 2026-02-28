@@ -2,10 +2,12 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
 type CookieStore = Awaited<ReturnType<typeof cookies>>;
+type CookieOptions = Parameters<CookieStore["set"]>[2];
+type CookieToSet = { name: string; value: string; options?: CookieOptions };
 
 type CookieHandlers = {
   getAll: () => ReturnType<CookieStore["getAll"]>;
-  setAll: (cookiesToSet: Array<Parameters<CookieStore["set"]>[0]>) => void;
+  setAll: (cookiesToSet: CookieToSet[]) => void;
 };
 
 const createClient = (cookieStore: CookieStore, handlers: CookieHandlers) =>
@@ -36,8 +38,12 @@ export async function createSupabaseServerActionClient() {
       return cookieStore.getAll();
     },
     setAll(cookiesToSet) {
-      cookiesToSet.forEach((cookie) => {
-        cookieStore.set(cookie);
+      cookiesToSet.forEach(({ name, value, options }) => {
+        try {
+          cookieStore.set({ name, value, ...(options ?? {}) });
+        } catch {
+          // Server Action cookie writes can fail in edge cases; ignore to match Supabase SSR guidance.
+        }
       });
     },
   });
